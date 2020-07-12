@@ -3,7 +3,7 @@ from django.views import View
 from django import http
 import re
 from .models import User
-from django.contrib.auth import login
+from django.contrib.auth import login, authenticate
 from meiduo_mall.utils.response_code import RETCODE
 from django_redis import get_redis_connection
 
@@ -41,7 +41,9 @@ class RegisterView(View):
             return http.HttpResponseForbidden('手机号码已经存在')
         # 验证码密码读取
         redis_cli = get_redis_connection('sms_code')
+        print(redis_cli)
         sms_code_redis = redis_cli.get(mobile)
+        print(sms_code_redis)
         if sms_code_redis is None:
             return http.HttpResponseForbidden('验证码已过期')
         # 删除 验证码不可以使用第二次
@@ -87,4 +89,22 @@ class MobileCountView(View):
             'errmsg': 'ok'
         })
 
+
+class LoginView(View):
+    def get(self, request):
+        return render(request, 'login.html')
+
+    def post(self, request):
+        # 验证
+        username = request.POST.get('username')
+        pwd = request.POST.get('pwd')
+        # 验证根据用户名查询
+        user = authenticate(request, username=username, password=pwd)
+        if user is None:
+            # 用户名和密码不匹配
+            return http.HttpResponseForbidden("用户名密码不匹配")
+        else:
+            # 正确
+            login(request, user)
+            return redirect('/')
     pass

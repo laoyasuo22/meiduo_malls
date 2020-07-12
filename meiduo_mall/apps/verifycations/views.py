@@ -9,6 +9,7 @@ from django_redis import get_redis_connection
 from . import constans
 from meiduo_mall.utils.response_code import RETCODE
 from meiduo_mall.libs.yuntongxun.sms import CCP
+from celery_tasks.sms.tasks import send_sms
 
 
 # Create your views here.
@@ -62,11 +63,23 @@ class SmsCode(View):
             })
         # 生成随机数
         sms_code = "%06d" % random.randint(0, 999999)
-        redis_cli.setex(mobile, constans.SMS_CODE_EXPIRES, sms_code)
-        # 写发标志防止 重复刷新
-        redis_cli.setex(mobile + '_flag', constans.SMS_CODE_FLAG, 1)
+        # redis_cli.setex(mobile, constans.SMS_CODE_EXPIRES, sms_code)
+        # # 写发标志防止 重复刷新
+        # redis_cli.setex(mobile + '_flag', constans.SMS_CODE_FLAG, 1)
         # 发短信
+        redis_cli = get_redis_connection('sms_code')
+        redis_pl = redis_cli.pipeline()
+        # 存入验证码
+        redis_pl.setex(mobile, constans.SMS_CODE_EXPIRES, sms_code)
+        # 存入标识符防止刷新
+        redis_pl.setex(mobile + '_flag', constans.SMS_CODE_FLAG, 1)
+        # 一次提供两行 减少于redis的交互
+        redis_pl.execute()
+        # 使用管道技术节省空间
+        # ccp=CCP()
         # ccp.send_template_sms(mobile, [sms_code,constans.SMS_CODE_EXPIRES/60],1)
+        # 通过delay调用，可以将任务加到队列中，交给celery去执行
+        send_sms.delay(mobile, sms_code)
         print(sms_code)
         return http.JsonResponse({
             'code': RETCODE.OK,
