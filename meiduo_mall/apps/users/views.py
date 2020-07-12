@@ -39,13 +39,14 @@ class RegisterView(View):
             return http.HttpResponseForbidden('手机号码格式有误')
         if User.objects.filter(mobile=mobile).count() > 0:
             return http.HttpResponseForbidden('手机号码已经存在')
-        # 电信密码读取
+        # 验证码密码读取
         redis_cli = get_redis_connection('sms_code')
         sms_code_redis = redis_cli.get(mobile)
         if sms_code_redis is None:
             return http.HttpResponseForbidden('验证码已过期')
         # 删除 验证码不可以使用第二次
         redis_cli.delete(mobile)
+        redis_cli.delete(mobile + '_flag')
         # 判断是否正确
         if sms_code_redis.decode() != sms_code:
             return http.HttpResponseForbidden('验证码错误')
